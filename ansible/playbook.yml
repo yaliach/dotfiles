@@ -354,6 +354,34 @@
       become: yes
       tags: [gnome, keybindings]
 
+    - name: Set workspace switching shortcuts (Super+1-4)
+      community.general.dconf:
+        key: "/org/gnome/desktop/wm/keybindings/switch-to-workspace-{{ item.index }}"
+        value: "['{{ item.binding }}']"
+        state: present
+      become_user: "{{ username }}"
+      become: yes
+      loop:
+        - { index: 1, binding: '<Super>1' }
+        - { index: 2, binding: '<Super>2' }
+        - { index: 3, binding: '<Super>3' }
+        - { index: 4, binding: '<Super>4' }
+      tags: [gnome, keybindings]
+
+    - name: Set move window to workspace shortcuts (Super+Shift+1-4)
+      community.general.dconf:
+        key: "/org/gnome/desktop/wm/keybindings/move-to-workspace-{{ item.index }}"
+        value: "['{{ item.binding }}']"
+        state: present
+      become_user: "{{ username }}"
+      become: yes
+      loop:
+        - { index: 1, binding: '<Shift><Super>1' }
+        - { index: 2, binding: '<Shift><Super>2' }
+        - { index: 3, binding: '<Shift><Super>3' }
+        - { index: 4, binding: '<Shift><Super>4' }
+      tags: [gnome, keybindings]
+
     - name: Install CLI tool to manage GNOME extensions
       ansible.builtin.pip:
         name: gnome-extensions-cli
