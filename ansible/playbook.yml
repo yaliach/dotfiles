@@ -1,0 +1,430 @@
+---
+- name: Fedora Workstation Setup
+  hosts: localhost
+  connection: local
+  become: yes
+  vars_files:
+    - vars.yml
+  vars:
+    dotfiles_dir: "{{ user_home }}/dotfiles"
+
+  tasks:
+    - name: Configure DNF for faster downloads
+      ansible.builtin.lineinfile:
+        path: /etc/dnf/dnf.conf
+        regexp: "^{{ item.key }}="
+        line: "{{ item.key }}={{ item.value }}"
+        create: yes
+      loop:
+        - { key: max_parallel_downloads, value: "{{ dnf_parallel_downloads }}" }
+        - { key: fastestmirror, value: "True" }
+      tags: [system, dnf]
+
+    - name: Get Fedora release version
+      ansible.builtin.command: rpm -E %fedora
+      register: fedora_version
+      changed_when: false
+      tags: [system, repos]
+
+    - name: Install RPM Fusion free repository
+      ansible.builtin.dnf:
+        name: "https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-{{ fedora_version.stdout }}.noarch.rpm"
+        state: present
+        disable_gpg_check: yes
+      tags: [system, repos]
+
+    - name: Install RPM Fusion nonfree repository
+      ansible.builtin.dnf:
+        name: "https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-{{ fedora_version.stdout }}.noarch.rpm"
+        state: present
+        disable_gpg_check: yes
+      tags: [system, repos]
+
+    - name: Add Docker CE repository
+      ansible.builtin.yum_repository:
+        name: docker-ce-stable
+        description: Docker CE Stable
+        baseurl: "https://download.docker.com/linux/fedora/$releasever/$basearch/stable"
+        gpgkey: https://download.docker.com/linux/fedora/gpg
+        gpgcheck: yes
+        enabled: yes
+      tags: [system, repos]
+
+    - name: Add HashiCorp repository
+      ansible.builtin.yum_repository:
+        name: hashicorp
+        description: Hashicorp Stable
+        baseurl: "https://rpm.releases.hashicorp.com/fedora/$releasever/$basearch/stable"
+        gpgkey: https://rpm.releases.hashicorp.com/gpg
+        gpgcheck: yes
+        enabled: yes
+      tags: [system, repos]
+
+    - name: Add Google Chrome repository
+      ansible.builtin.yum_repository:
+        name: google-chrome
+        description: Google Chrome
+        baseurl: https://dl.google.com/linux/chrome/rpm/stable/x86_64
+        gpgkey: https://dl.google.com/linux/linux_signing_key.pub
+        gpgcheck: yes
+        enabled: yes
+      tags: [system, repos]
+
+    - name: Upgrade all system packages
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+      tags: [system, packages]
+
+    - name: Install system packages
+      ansible.builtin.dnf:
+        name: "{{ system_packages }}"
+        state: present
+      tags: [packages]
+
+    - name: Install Docker packages
+      ansible.builtin.dnf:
+        name: "{{ docker_packages }}"
+        state: present
+      tags: [packages, docker]
+
+    - name: Install terraform
+      ansible.builtin.dnf:
+        name: terraform
+        state: present
+      tags: [packages]
+
+    - name: Check for NVIDIA GPU
+      ansible.builtin.command: lspci | grep -i nvidia
+      register: nvidia_check
+      changed_when: false
+      failed_when: false
+      tags: [system, nvidia]
+
+    - name: Install NVIDIA drivers
+      ansible.builtin.dnf:
+        name:
+          - akmod-nvidia
+          - xorg-x11-drv-nvidia-cuda
+        state: present
+      when: nvidia_check.rc == 0
+      tags: [nvidia]
+
+    - name: Install starship
+      ansible.builtin.shell: curl -sS https://starship.rs/install.sh | sh -s -- -y -b /usr/local/bin
+      args:
+        creates: /usr/local/bin/starship
+      tags: [packages, starship]
+
+    - name: Add Flathub remote
+      community.general.flatpak_remote:
+        name: flathub
+        flatpakrepo_url: https://flathub.org/repo/flathub.flatpakrepo
+        state: present
+        method: system
+      tags: [flatpak]
+
+    - name: Install Flatpak applications
+      community.general.flatpak:
+        name: "{{ item }}"
+        state: present
+        method: system
+      loop: "{{ flatpak_apps }}"
+      tags: [flatpak]
+
+    - name: Create fonts directory
+      ansible.builtin.file:
+        path: "{{ user_home }}/.local/share/fonts/JetBrainsMono"
+        state: directory
+        mode: "0755"
+      become_user: "{{ username }}"
+      become: yes
+      tags: [fonts]
+
+    - name: Download JetBrainsMono Nerd Font
+      ansible.builtin.get_url:
+        url: https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz
+        dest: /tmp/JetBrainsMono.tar.xz
+        timeout: 60
+      tags: [fonts]
+
+    - name: Extract JetBrainsMono Nerd Font
+      ansible.builtin.unarchive:
+        src: /tmp/JetBrainsMono.tar.xz
+        dest: "{{ user_home }}/.local/share/fonts/JetBrainsMono"
+        remote_src: yes
+      become_user: "{{ username }}"
+      become: yes
+      tags: [fonts]
+
+    - name: Enable and start Docker service
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: yes
+      tags: [docker]
+
+    - name: Add user to docker group
+      ansible.builtin.user:
+        name: "{{ username }}"
+        groups: docker
+        append: yes
+      tags: [docker]
+
+    - name: Download kubectl binary
+      ansible.builtin.get_url:
+        url: https://dl.k8s.io/release/v1.32.0/bin/linux/amd64/kubectl
+        dest: /usr/local/bin/kubectl
+        mode: "0755"
+        timeout: 60
+      tags: [packages]
+
+    - name: Clone Oh My Zsh
+      ansible.builtin.git:
+        repo: https://github.com/ohmyzsh/ohmyzsh.git
+        dest: "{{ user_home }}/.oh-my-zsh"
+        depth: 1
+      become_user: "{{ username }}"
+      become: yes
+      tags: [shell]
+
+    - name: Clone zsh-autosuggestions
+      ansible.builtin.git:
+        repo: https://github.com/zsh-users/zsh-autosuggestions
+        dest: "{{ user_home }}/.oh-my-zsh/custom/plugins/zsh-autosuggestions"
+        depth: 1
+      become_user: "{{ username }}"
+      become: yes
+      tags: [shell]
+
+    - name: Clone zsh-syntax-highlighting
+      ansible.builtin.git:
+        repo: https://github.com/zsh-users/zsh-syntax-highlighting
+        dest: "{{ user_home }}/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting"
+        depth: 1
+      become_user: "{{ username }}"
+      become: yes
+      tags: [shell]
+
+    - name: Clone zsh-completions
+      ansible.builtin.git:
+        repo: https://github.com/zsh-users/zsh-completions
+        dest: "{{ user_home }}/.oh-my-zsh/custom/plugins/zsh-completions"
+        depth: 1
+      become_user: "{{ username }}"
+      become: yes
+      tags: [shell]
+
+    - name: Change default shell to zsh
+      ansible.builtin.user:
+        name: "{{ username }}"
+        shell: /bin/zsh
+      tags: [shell]
+
+    - name: Clone TPM
+      ansible.builtin.git:
+        repo: https://github.com/tmux-plugins/tpm
+        dest: "{{ user_home }}/.tmux/plugins/tpm"
+        depth: 1
+      become_user: "{{ username }}"
+      become: yes
+      tags: [tmux]
+
+    - name: Create .zshrc.d directory
+      ansible.builtin.file:
+        path: "{{ user_home }}/.zshrc.d"
+        state: directory
+        mode: "0755"
+      become_user: "{{ username }}"
+      become: yes
+      tags: [shell]
+
+    - name: Create .bashrc.d directory
+      ansible.builtin.file:
+        path: "{{ user_home }}/.bashrc.d"
+        state: directory
+        mode: "0755"
+      become_user: "{{ username }}"
+      become: yes
+      tags: [shell]
+
+    - name: Remove default bash dotfiles that conflict with stow
+      ansible.builtin.file:
+        path: "{{ user_home }}/{{ item }}"
+        state: absent
+      loop:
+        - .bashrc
+        - .bash_profile
+        - .bash_logout
+      become_user: "{{ username }}"
+      become: yes
+      tags: [dotfiles]
+
+    - name: Stow dotfile modules
+      ansible.builtin.command:
+        cmd: stow {{ item }}
+        chdir: "{{ dotfiles_dir }}"
+      become_user: "{{ username }}"
+      become: yes
+      loop: "{{ stow_modules }}"
+      register: stow_result
+      changed_when: '"LINK" in stow_result.stderr'
+      failed_when: stow_result.rc != 0 and "already present" not in stow_result.stderr
+      tags: [dotfiles]
+
+    - name: Enable fractional scaling on Wayland
+      community.general.dconf:
+        key: /org/gnome/mutter/experimental-features
+        value: "['scale-monitor-framebuffer']"
+        state: present
+      become_user: "{{ username }}"
+      become: yes
+      tags: [gnome]
+
+    - name: Set custom keybinding - Browser
+      community.general.dconf:
+        key: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/{{ item.subkey }}"
+        value: "{{ item.value }}"
+        state: present
+      become_user: "{{ username }}"
+      become: yes
+      loop:
+        - { subkey: name, value: "'Browser'" }
+        - { subkey: binding, value: "'<Super>b'" }
+        - { subkey: command, value: "'google-chrome'" }
+      tags: [gnome, keybindings]
+
+    - name: Set custom keybinding - Terminal
+      community.general.dconf:
+        key: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/{{ item.subkey }}"
+        value: "{{ item.value }}"
+        state: present
+      become_user: "{{ username }}"
+      become: yes
+      loop:
+        - { subkey: name, value: "'Terminal'" }
+        - { subkey: binding, value: "'<Super>t'" }
+        - { subkey: command, value: "'kitty'" }
+      tags: [gnome, keybindings]
+
+    - name: Register custom keybindings list
+      community.general.dconf:
+        key: /org/gnome/settings-daemon/plugins/media-keys/custom-keybindings
+        value: "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/', '/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/']"
+        state: present
+      become_user: "{{ username }}"
+      become: yes
+      tags: [gnome, keybindings]
+
+    - name: Set close window shortcut
+      community.general.dconf:
+        key: /org/gnome/desktop/wm/keybindings/close
+        value: "['<Super>q']"
+        state: present
+      become_user: "{{ username }}"
+      become: yes
+      tags: [gnome, keybindings]
+
+    - name: Configure Tiling Shell settings
+      community.general.dconf:
+        key: "/org/gnome/shell/extensions/tilingshell/{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+      become_user: "{{ username }}"
+      become: yes
+      loop: "{{ tilingshell_settings | dict2items }}"
+      tags: [gnome, tilingshell]
+
+    - name: Disable conflicting GNOME default shortcuts
+      community.general.dconf:
+        key: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+      become_user: "{{ username }}"
+      become: yes
+      loop: "{{ disabled_gnome_defaults | dict2items }}"
+      tags: [gnome, defaults]
+
+    - name: Set lock screen shortcut
+      community.general.dconf:
+        key: /org/gnome/settings-daemon/plugins/media-keys/screensaver
+        value: "['<Super>x']"
+        state: present
+      become_user: "{{ username }}"
+      become: yes
+      tags: [gnome, keybindings]
+
+    - name: Install CLI tool to manage GNOME extensions
+      ansible.builtin.pip:
+        name: gnome-extensions-cli
+        extra_args: --user --upgrade
+      become_user: "{{ username }}"
+      become: yes
+      tags: [gnome, extensions]
+
+    - name: Install and enable GNOME extensions
+      ansible.builtin.shell:
+        cmd: "{{ user_home }}/.local/bin/gext install tilingshell@ferrarodomenico.com && {{ user_home }}/.local/bin/gext enable tilingshell@ferrarodomenico.com && {{ user_home }}/.local/bin/gext install clipboard-history@alexsaveau.dev && {{ user_home }}/.local/bin/gext enable clipboard-history@alexsaveau.dev"
+      become_user: "{{ username }}"
+      become: yes
+      register: gext_result
+      changed_when: '"Installed" in gext_result.stdout'
+      failed_when: gext_result.rc != 0 and "already installed" not in gext_result.stdout
+      tags: [gnome, extensions]
+
+    - name: Fix lid-close sleep behavior
+      ansible.builtin.lineinfile:
+        path: /etc/systemd/logind.conf
+        regexp: "^{{ item.key }}|^#{{ item.key }}"
+        line: "{{ item.key }}={{ item.value }}"
+        create: yes
+      loop:
+        - { key: HandleLidSwitch, value: ignore }
+        - { key: HandleLidSwitchDocked, value: ignore }
+        - { key: HandleLidSwitchExternalPower, value: ignore }
+        - { key: LidSwitchIgnoreInhibited, value: "yes" }
+      tags: [system, gnome]
+
+    - name: Restore SELinux context for logind.conf
+      ansible.builtin.command: restorecon -F /etc/systemd/logind.conf
+      changed_when: false
+      tags: [system, gnome]
+
+    - name: Install opencode
+      ansible.builtin.shell: curl -fsSL https://opencode.ai/install | bash
+      args:
+        creates: "{{ user_home }}/.opencode/bin/opencode"
+      become_user: "{{ username }}"
+      become: yes
+      tags: [opencode]
+
+    - name: Update font cache
+      ansible.builtin.command: fc-cache -fv
+      become_user: "{{ username }}"
+      become: yes
+      changed_when: false
+      tags: [fonts]
+
+    - name: Install TPM plugins
+      ansible.builtin.command:
+        cmd: "{{ user_home }}/.tmux/plugins/tpm/bin/install_plugins"
+      become_user: "{{ username }}"
+      become: yes
+      changed_when: false
+      tags: [tmux]
+
+    - name: Install Neovim plugins via lazy.nvim
+      ansible.builtin.shell:
+        cmd: nvim --headless "+Lazy! sync" +qa 2>/dev/null
+      become_user: "{{ username }}"
+      become: yes
+      changed_when: false
+      tags: [nvim]
+
+    - name: Print setup summary
+      ansible.builtin.debug:
+        msg:
+          - "Setup complete!"
+          - "Reboot recommended to apply NVIDIA drivers, Docker group, and shell changes."
+          - "Log out and back in for GNOME keybindings to take effect."
+      tags: [always]

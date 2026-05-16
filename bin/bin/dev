@@ -1,0 +1,52 @@
+#!/usr/bin/bash
+
+# Require session name
+if [ -z "$1" ]; then
+  echo "Error: No session name provided."
+  echo "Usage: dev <session_name>"
+  exit 1
+fi
+
+SEARCH_NAME="$1"
+TARGET_DIR=""
+
+# Search for directory in ~ and ~/repos
+TARGET_DIR=$(find "$HOME" "$HOME/repos" -maxdepth 1 -type d -name "$SEARCH_NAME" -print -quit)
+
+# Logic if project isn't found
+if [ -z "$TARGET_DIR" ]; then
+  read -p "Project '$SEARCH_NAME' not found. Launch IDE in current directory? (y/n): " confirm
+  if [[ $confirm =~ ^[Yy]$ ]]; then
+    TARGET_DIR=$(pwd)
+    SESSION="$SEARCH_NAME" # Use the passed name if project doesn't exist
+  else
+    echo "Aborting."
+    exit 1
+  fi
+else
+  # Use the folder's name as the session name
+  SESSION=$(basename "$TARGET_DIR")
+fi
+
+# Check for existing session and attach
+# 'has-session' returns 0 if the session exists
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "Attaching to existing session: $SESSION"
+  tmux attach -t "$SESSION"
+  exit 0
+fi
+
+# Create new session since it doesn't exist
+# -c starts the session in the project directory
+tmux new-session -d -s "$SESSION" -c "$TARGET_DIR"
+tmux split-window -h -t "$SESSION":0 -c "$TARGET_DIR"
+
+# Adjustments
+tmux send-keys -t "${SESSION}.1" 'tmux resize-pane -x 45' C-m
+tmux send-keys -t "${SESSION}.1" 'clear' C-m
+
+# Run nvim in the primary pane
+tmux send-keys -t "${SESSION}.0" 'nvim .' C-m
+
+# Attach to the newly created session
+tmux attach -t "$SESSION"

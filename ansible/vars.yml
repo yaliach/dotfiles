@@ -1,0 +1,69 @@
+---
+username: yali
+user_home: /home/yali
+
+dnf_parallel_downloads: 10
+
+system_packages:
+  - git
+  - zsh
+  - stow
+  - tmux
+  - neovim
+  - kitty
+  - zoxide
+  - util-linux-user
+  - openssh-clients
+  - flatpak
+  - python3-pip
+  - gnome-tweaks
+  - gnome-extensions-app
+  - gstreamer1-plugins-good
+  - gstreamer1-plugins-bad-free
+  - gstreamer1-plugins-ugly-free
+  - gstreamer1-libav
+  - google-chrome-stable
+  - vlc
+
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - docker-ce-rootless-extras
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+flatpak_apps:
+  - md.obsidian.Obsidian
+  - com.stremio.Stremio
+
+tilingshell_settings:
+  enable-autotiling: "true"
+  edge-tiling-offset: "uint32 16"
+  edge-tiling-mode: "'default'"
+  cycle-layouts-backward: "['<Shift>']"
+  selected-layouts: "[['Layout 4'], ['Layout 4'], ['Layout 4'], ['Layout 4']]"
+  window-use-custom-border-color: "false"
+  focus-window-left: "['<Super>h']"
+  focus-window-right: "['<Super>l']"
+  move-window-down: "['<Shift><Super>j']"
+  move-window-left: "['<Shift><Super>h']"
+  move-window-right: "['<Shift><Super>l']"
+  move-window-up: "['<Shift><Super>k']"
+  quarter-tiling-threshold: "uint32 21"
+  snap-assistant-threshold: "53"
+
+disabled_gnome_defaults:
+  /org/gnome/desktop/wm/keybindings/maximize: "@as []"
+  /org/gnome/desktop/wm/keybindings/minimize: "@as []"
+  /org/gnome/mutter/keybindings/toggle-tiled-left: "@as []"
+  /org/gnome/mutter/keybindings/toggle-tiled-right: "@as []"
+
+stow_modules:
+  - bash
+  - zsh
+  - nvim
+  - kitty
+  - tmux
+  - starship
+  - opencode
+  - bin
