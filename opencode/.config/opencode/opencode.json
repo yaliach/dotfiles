@@ -48,8 +48,5 @@
       ],
       "enabled": true
     }
-  },
-  "plugin": [
-    "opencode-claude-auth"
-  ]
+  }
 }
