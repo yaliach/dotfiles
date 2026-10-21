@@ -1,5 +1,20 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "providers": {
+    "digitalocean": {
+      "enabled": true,
+      "api_key": "{env:DIGITALOCEAN_MODEL_KEY}"
+    },
+    "amazon-bedrock": {
+      "enabled": true,
+      "options": {
+        "region": "eu-central-1"
+      }
+    }
+  },
+  "experimental": {
+    "mcp_timeout": 120000
+  },
   "mcp": {
     "shadcn": {
       "type": "local",
@@ -15,27 +30,12 @@
       "url": "https://mcp.inkeep.com/zod/mcp",
       "enabled": true
     },
-    "better-auth": {
-      "type": "remote",
-      "url": "https://mcp.inkeep.com/better-auth/mcp",
-      "enabled": true
-    },
     "next-devtools": {
       "type": "local",
       "command": [
         "npx",
         "-y",
         "next-devtools-mcp@latest"
-      ],
-      "enabled": true
-    },
-    "prisma": {
-      "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "prisma",
-        "mcp"
       ],
       "enabled": true
     },
@@ -47,6 +47,25 @@
         "@upstash/context7-mcp@latest"
       ],
       "enabled": true
+    },
+    "cloudwatch": {
+      "type": "local",
+      "command": [
+        "awslabs.cloudwatch-mcp-server"
+      ],
+      "enabled": true,
+      "environment": {
+        "AWS_PROFILE": "{env:AWS_PROFILE}",
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    },
+    "n8n-mcp": {
+      "type": "remote",
+      "url": "{env:N8N_MCP_URL}",
+      "enabled": true,
+      "headers": {
+        "Authorization": "Bearer {env:N8N_MCP_TOKEN}"
+      }
     }
   }
 }
