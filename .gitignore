@@ -1,2 +1,6 @@
 lazy-lock.json
 lazyvim.json
+
+# Ignore everything in bin/bin except dev
+bin/bin/*
+!bin/bin/dev
