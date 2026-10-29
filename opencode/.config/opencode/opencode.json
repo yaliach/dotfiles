@@ -1,5 +1,10 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "skills": {
+    "paths": [
+      "~/repos/skills"
+    ]
+  },
   "experimental": {
     "mcp_timeout": 120000
   },
