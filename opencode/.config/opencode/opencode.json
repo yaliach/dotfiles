@@ -5,9 +5,6 @@
       "~/repos/skills"
     ]
   },
-  "experimental": {
-    "mcp_timeout": 120000
-  },
   "mcp": {
     "shadcn": {
       "type": "local",
